@@ -14004,12 +14004,12 @@ function format_cell(cell, v, o) {
 }
 
 function sheet_to_json(sheet, opts){
-	var val, row, range, header = 0, offset = 1, r, hdr = [], isempty, R, C, v, vv;
+	var val, row, range, header = 0, offset = 1, r, hdr = [], isempty, R, C, v;
 	var o = opts != null ? opts : {};
+	var skipUndefined = o.skipUndefined === undefined ? true : o.skipUndefined;
 	var raw = o.raw;
-	var defval = o.defval;
 	if(sheet == null || sheet["!ref"] == null) return [];
-	range = o.range != null ? o.range : sheet["!ref"];
+	range = o.range !== undefined ? o.range : sheet["!ref"];
 	if(o.header === 1) header = 1;
 	else if(o.header === "A") header = 2;
 	else if(Array.isArray(o.header)) header = 3;
@@ -14031,11 +14031,8 @@ function sheet_to_json(sheet, opts){
 			case 2: hdr[C] = cols[C]; break;
 			case 3: hdr[C] = o.header[C - r.s.c]; break;
 			default:
-				if(val == null) continue;
-				vv = v = format_cell(val);
-				var counter = 0;
-				for(var CC = 0; CC < hdr.length; ++CC) if(hdr[CC] == vv) vv = v + "_" + (++counter);
-				hdr[C] = vv;
+				if(skipUndefined && val === undefined) continue;
+				hdr[C] = format_cell(val);
 		}
 	}
 
@@ -14045,31 +14042,27 @@ function sheet_to_json(sheet, opts){
 		if(header === 1) row = [];
 		else {
 			row = {};
-			if(Object.defineProperty) try { Object.defineProperty(row, '__rowNum__', {value:R, enumerable:false}); } catch(e) { row.__rowNum__ = R; }
+			if(Object.defineProperty) Object.defineProperty(row, '__rowNum__', {value:R, enumerable:false});
 			else row.__rowNum__ = R;
 		}
 		for (C = r.s.c; C <= r.e.c; ++C) {
 			val = sheet[cols[C] + rr];
 			if(val === undefined || val.t === undefined) {
-				if(defval === undefined) continue;
-				if(hdr[C] != null) { row[hdr[C]] = defval; isempty = false; }
-				continue;
-			}
+ 				if (!skipUndefined) {
+ 					row[hdr[C]] = o.defaultValue || '';
+ 					isempty = false;
+ 				}
+ 				continue;
+ 			}
 			v = val.v;
 			switch(val.t){
-				case 'z': if(v == null) break; continue;
 				case 'e': continue;
-				case 's': case 'd': case 'b': case 'n': break;
-				default: throw new Error('unrecognized type ' + val.t);
+				case 's': break;
+				case 'b': case 'n': break;
+				default: throw 'unrecognized type ' + val.t;
 			}
-			if(hdr[C] != null) {
-				if(v == null) {
-					if(defval !== undefined) row[hdr[C]] = defval;
-					else if(raw && v === null) row[hdr[C]] = null;
-					else continue;
-				} else {
-					row[hdr[C]] = raw ? v : format_cell(val,v);
-				}
+			if(!skipUndefined || v !== undefined) {
+				row[hdr[C]] = raw ? v : format_cell(val,v);
 				isempty = false;
 			}
 		}
